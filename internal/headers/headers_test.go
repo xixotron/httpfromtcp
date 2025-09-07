@@ -14,7 +14,7 @@ func TestHeaderParse(t *testing.T) {
 	n, done, err := headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
+	assert.Equal(t, "localhost:42069", headers["host"])
 	assert.Equal(t, 23, n)
 	assert.False(t, done)
 
@@ -33,17 +33,17 @@ func TestHeaderParse(t *testing.T) {
 	n, done, err = headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "localhost:42069", headers["Host"])
+	assert.Equal(t, "localhost:42069", headers["host"])
 	assert.Equal(t, 37, n)
 	assert.False(t, done)
 
 	// Test: Valid 2 headers with existing headers
-	headers = Headers{"Host": "localhost:42069"}
+	headers = Headers{"host": "localhost:42069"}
 	data = []byte("User-Agent: curl/7.81.0\r\nAccept: */*\r\n\r\n")
 	n, done, err = headers.Parse(data)
 	require.NoError(t, err)
 	require.NotNil(t, headers)
-	assert.Equal(t, "curl/7.81.0", headers["User-Agent"])
+	assert.Equal(t, "curl/7.81.0", headers["user-agent"])
 	assert.False(t, done)
 	assert.Equal(t, 25, n)
 	n, done, err = headers.Parse(data[n:])
@@ -53,9 +53,9 @@ func TestHeaderParse(t *testing.T) {
 	assert.False(t, done)
 	assert.Equal(t,
 		Headers{
-			"Host":       "localhost:42069",
-			"User-Agent": "curl/7.81.0",
-			"Accept":     "*/*",
+			"host":       "localhost:42069",
+			"user-agent": "curl/7.81.0",
+			"accept":     "*/*",
 		},
 		headers,
 	)
@@ -68,4 +68,13 @@ func TestHeaderParse(t *testing.T) {
 	require.NotNil(t, headers)
 	assert.Equal(t, 2, n)
 	assert.True(t, done)
+
+	// Test: Invalid single header name
+	headers = NewHeaders()
+	data = []byte("H@st: localhost:42069\r\n\r\n")
+	n, done, err = headers.Parse(data)
+	require.Error(t, err)
+	require.NotNil(t, headers)
+	assert.Equal(t, 0, n)
+	assert.False(t, done)
 }

@@ -40,7 +40,7 @@ func headerFromString(str string) (key string, value string, err error) {
 	}
 
 	key = parts[0]
-	if key != strings.TrimRight(key, " ") {
+	if !validToken(key) {
 		return "", "", fmt.Errorf("invalid header name %s\n", key)
 	}
 
@@ -49,5 +49,28 @@ func headerFromString(str string) (key string, value string, err error) {
 }
 
 func (h Headers) Set(key string, value string) {
+	key = strings.ToLower(key)
 	h[key] = value
+}
+
+func validToken(str string) bool {
+	if len(str) < 1 {
+		return false
+	}
+
+	specialChars := map[rune]struct{}{
+		'!': {}, '#': {}, '$': {}, '%': {}, '&': {}, '\'': {}, '*': {},
+		'+': {}, '-': {}, '.': {}, '^': {}, '_': {}, '`': {}, '|': {}, '~': {},
+	}
+	for _, c := range str {
+		if (c >= 'A' && c <= 'Z') ||
+			(c >= 'a' && c <= 'z') ||
+			(c >= '0' && c <= '9') {
+			continue
+		} else if _, ok := specialChars[c]; ok {
+			continue
+		}
+		return false
+	}
+	return true
 }
