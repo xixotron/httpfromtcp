@@ -1,12 +1,11 @@
 package main
 
 import (
-	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net"
-	"strings"
+
+	"github.com/xixotron/httpfromtcp/internal/request"
 )
 
 const port = ":42069"
@@ -25,45 +24,21 @@ func main() {
 			log.Fatalf("Error accepting connection: %s\n", err)
 		}
 		fmt.Printf("Accepted connection from %s\n", con.RemoteAddr())
+		defer con.Close()
 
-		for line := range getLinesChannel(con) {
-			fmt.Printf("read: %s\n", line)
+		req, err := request.RequestFromReader(con)
+		if err != nil {
+			log.Fatalf("Error parsing request: %s\n", err)
 		}
+		printRequest(req)
+
 		fmt.Printf("connection from %s has been closed\n", con.RemoteAddr())
 	}
 }
 
-func getLinesChannel(f io.ReadCloser) <-chan string {
-	lines := make(chan string)
-	go func() {
-		defer f.Close()
-		defer close(lines)
-
-		line := ""
-		for {
-			buff := make([]byte, 8)
-			n, err := f.Read(buff)
-			if err != nil {
-				if !errors.Is(err, io.EOF) {
-					log.Printf("Error reading file: %v\n", err)
-				}
-				break
-			}
-
-			str := string(buff[:n])
-			parts := strings.Split(str, "\n")
-			for i, part := range parts {
-				if i > 0 {
-					lines <- line
-					line = ""
-				}
-				line += part
-			}
-		}
-		if line != "" {
-			lines <- line
-		}
-	}()
-
-	return lines
+func printRequest(req *request.Request) {
+	fmt.Println("Request line:")
+	fmt.Println("- Method:", req.RequestLine.Method)
+	fmt.Println("- Target:", req.RequestLine.RequestTarget)
+	fmt.Println("- Version:", req.RequestLine.HttpVersion)
 }
