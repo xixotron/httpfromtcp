@@ -50,6 +50,15 @@ func headerFromString(str string) (key string, value string, err error) {
 
 func (h Headers) Set(key string, value string) {
 	key = strings.ToLower(key)
+	if previous, ok := h[key]; ok {
+		value = strings.Join(
+			[]string{
+				previous,
+				value,
+			},
+			",",
+		)
+	}
 	h[key] = value
 }
 

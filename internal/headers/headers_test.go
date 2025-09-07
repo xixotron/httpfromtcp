@@ -77,4 +77,18 @@ func TestHeaderParse(t *testing.T) {
 	require.NotNil(t, headers)
 	assert.Equal(t, 0, n)
 	assert.False(t, done)
+
+	// Test: Valid duplicated header
+	headers = NewHeaders()
+	data = []byte("Set-Person: lane-loves-go\r\nSet-Person: prime-loves-zig\r\nSet-Person: tj-loves-ocaml\r\n\r\n")
+	bytesConsumed := 0
+	for done = false; !done; {
+		n, done, err = headers.Parse(data[bytesConsumed:])
+		require.NoError(t, err)
+		require.NotNil(t, headers)
+		bytesConsumed += n
+	}
+	assert.Equal(t, "lane-loves-go,prime-loves-zig,tj-loves-ocaml", headers["set-person"])
+	assert.Equal(t, 86, bytesConsumed)
+	assert.True(t, done)
 }
