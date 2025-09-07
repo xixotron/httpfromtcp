@@ -24,7 +24,6 @@ func main() {
 			log.Fatalf("Error accepting connection: %s\n", err)
 		}
 		fmt.Printf("Accepted connection from %s\n", con.RemoteAddr())
-		defer con.Close()
 
 		req, err := request.RequestFromReader(con)
 		if err != nil {
