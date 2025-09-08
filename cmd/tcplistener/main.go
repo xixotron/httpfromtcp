@@ -37,7 +37,19 @@ func main() {
 
 func printRequest(req *request.Request) {
 	fmt.Println("Request line:")
-	fmt.Println("- Method:", req.RequestLine.Method)
-	fmt.Println("- Target:", req.RequestLine.RequestTarget)
-	fmt.Println("- Version:", req.RequestLine.HttpVersion)
+	fmt.Printf("- Method: %s\n", req.RequestLine.Method)
+	fmt.Printf("- Target: %s\n", req.RequestLine.RequestTarget)
+	fmt.Printf("- Version: %s\n", req.RequestLine.HttpVersion)
+	printRequestHeaders(req)
+}
+
+func printRequestHeaders(req *request.Request) {
+	if len(req.Headers) == 0 {
+		fmt.Println("No Headers")
+		return
+	}
+	fmt.Println("Headers:")
+	for key, value := range req.Headers {
+		fmt.Printf("- %s: %s\n", key, value)
+	}
 }
