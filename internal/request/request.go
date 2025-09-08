@@ -3,20 +3,25 @@ package request
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"strings"
+
+	"github.com/xixotron/httpfromtcp/internal/headers"
 )
 
 type requestState int
 
 const (
 	requestStateInitialized requestState = iota
+	requestStateParsingHeaders
 	requestStateDone
 )
 
 type Request struct {
 	RequestLine RequestLine
 	state       requestState
+	Headers     headers.Headers
 }
 
 type RequestLine struct {
@@ -33,7 +38,8 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 	buff := make([]byte, bufferSize)
 	readToIndex := 0
 	request := &Request{
-		state: requestStateInitialized,
+		state:   requestStateInitialized,
+		Headers: headers.NewHeaders(),
 	}
 	for request.state != requestStateDone {
 		if readToIndex >= len(buff) {
@@ -46,7 +52,7 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				if request.state != requestStateDone {
-					return nil, errors.New("incomplete request")
+					return nil, fmt.Errorf("incomplete request, in state: %d, read n bytes on EOF: %d", request.state, bytesRead)
 				}
 				break
 			}
@@ -67,24 +73,47 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 }
 
 func (r *Request) parse(data []byte) (int, error) {
-	switch r.state {
-	case requestStateInitialized:
-		requetLine, c, err := parseRequestLine(data)
+	totalBytesParsed := 0
+	for r.state != requestStateDone {
+		n, err := r.parseSingle(data[totalBytesParsed:])
 		if err != nil {
 			return 0, err
 		}
-		if c == 0 {
+		totalBytesParsed += n
+		if n == 0 {
+			break
+		}
+	}
+	return totalBytesParsed, nil
+}
+
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.state {
+	case requestStateInitialized:
+		requetLine, n, err := parseRequestLine(data)
+		if err != nil {
+			return 0, err
+		}
+		if n == 0 {
 			return 0, nil
 		}
 		r.RequestLine = *requetLine
-		r.state = requestStateDone
-		return c, nil
+		r.state = requestStateParsingHeaders
+		return n, nil
+	case requestStateParsingHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+		if done {
+			r.state = requestStateDone
+		}
+		return n, nil
 	case requestStateDone:
-		return 0, errors.New("error: trying to read data in a done state")
+		return 0, fmt.Errorf("error: trying to read data in a done state")
 	default:
-		return 0, errors.New("error: unknown state")
+		return 0, fmt.Errorf("error: unknown state")
 	}
-
 }
 
 func parseRequestLine(data []byte) (*RequestLine, int, error) {
@@ -105,13 +134,13 @@ func parseRequestLine(data []byte) (*RequestLine, int, error) {
 func requestLineFromString(line string) (*RequestLine, error) {
 	parts := strings.Split(line, " ")
 	if len(parts) != 3 {
-		return nil, errors.New("Malformed request line")
+		return nil, fmt.Errorf("Malformed request line")
 	}
 
 	method := parts[0]
 	for _, c := range method {
 		if c < 'A' || c > 'Z' {
-			return nil, errors.New("Invalid Method")
+			return nil, fmt.Errorf("Invalid Method")
 		}
 	}
 
@@ -119,16 +148,16 @@ func requestLineFromString(line string) (*RequestLine, error) {
 
 	httpVersionParts := strings.Split(parts[2], "/")
 	if len(httpVersionParts) != 2 {
-		return nil, errors.New("Malformed HTTP-Version")
+		return nil, fmt.Errorf("Malformed HTTP-Version")
 	}
 
 	httpPart := httpVersionParts[0]
 	if httpPart != "HTTP" {
-		return nil, errors.New("Unknown HTTP-Version")
+		return nil, fmt.Errorf("Unknown HTTP-Version")
 	}
 	version := httpVersionParts[1]
 	if version != "1.1" {
-		return nil, errors.New("Unknown / unsupported HTTP-version")
+		return nil, fmt.Errorf("Unknown / unsupported HTTP-version")
 	}
 
 	return &RequestLine{
