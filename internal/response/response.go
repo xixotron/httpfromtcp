@@ -48,7 +48,7 @@ func WriteHeaders(w io.Writer, headers headers.Headers) error {
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
 	headers := headers.NewHeaders()
-	headers.Set("Content-Length", fmt.Sprintf("%d", 10))
+	headers.Set("Content-Length", fmt.Sprintf("%d", contentLen))
 	headers.Set("Connection", "close")
 	headers.Set("Content-Type", "text/plain")
 
