@@ -48,6 +48,14 @@ func headerFromString(str string) (key string, value string, err error) {
 	return key, value, nil
 }
 
+func (h Headers) Get(key string) string {
+	key = strings.ToLower(key)
+	value, ok := h[key]
+	if !ok {
+		return ""
+	}
+	return value
+}
 func (h Headers) Set(key string, value string) {
 	key = strings.ToLower(key)
 	if previous, ok := h[key]; ok {
