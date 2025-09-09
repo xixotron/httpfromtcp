@@ -41,6 +41,9 @@ func printRequest(req *request.Request) {
 	fmt.Printf("- Target: %s\n", req.RequestLine.RequestTarget)
 	fmt.Printf("- Version: %s\n", req.RequestLine.HttpVersion)
 	printRequestHeaders(req)
+	fmt.Println("Body:")
+	fmt.Println(string(req.Body))
+	fmt.Println("End of Request")
 }
 
 func printRequestHeaders(req *request.Request) {
