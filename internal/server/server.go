@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"sync/atomic"
+
+	"github.com/xixotron/httpfromtcp/internal/response"
 )
 
 type Server struct {
@@ -48,7 +50,7 @@ func (s *Server) accept() {
 	}
 }
 
-const response = "HTTP/1.1 200 OK\r\n" +
+const responseText = "HTTP/1.1 200 OK\r\n" +
 	"Content-Type: text/plain\r\n" +
 	"Content-Length: 13\r\n" +
 	"\r\n" +
@@ -56,8 +58,15 @@ const response = "HTTP/1.1 200 OK\r\n" +
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	_, err := conn.Write([]byte(response))
+	err := response.WriteStatusLine(conn, response.StatusOK)
 	if err != nil {
-		log.Printf("Error writing response: %v", err)
+		log.Printf("Error writing response Status-Line: %v\n", err)
+		return
+	}
+
+	err = response.WriteHeaders(conn, response.GetDefaultHeaders(0))
+	if err != nil {
+		log.Printf("Error writing response Headers: %v\n", err)
+		return
 	}
 }
