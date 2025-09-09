@@ -240,7 +240,7 @@ func TestParseRequestBody(t *testing.T) {
 			"Content-Length: 6\r\n" +
 			"\r\n" +
 			"longer content",
-		numBytesPerRead: 3,
+		numBytesPerRead: 20, // if numBytes is < Content-Length we won't get an error
 	}
 	r, err = RequestFromReader(reader)
 	require.Error(t, err)
