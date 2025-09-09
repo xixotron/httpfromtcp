@@ -17,7 +17,6 @@ const (
 	requestStateInitialized requestState = iota
 	requestStateParsingHeaders
 	requestStateParsingBody
-	requestStateParsingBodyDone
 	requestStateDone
 )
 
@@ -55,11 +54,10 @@ func RequestFromReader(r io.Reader) (*Request, error) {
 		bytesRead, err := r.Read(buff[readToIndex:])
 		if err != nil {
 			if errors.Is(err, io.EOF) {
-				if request.state == requestStateParsingBodyDone {
-					request.state = requestStateDone
-					break
+				if request.state != requestStateDone {
+					return nil, fmt.Errorf("incomplete request, in state: %d, read n bytes on EOF: %d", request.state, bytesRead)
 				}
-				return nil, fmt.Errorf("incomplete request, in state: %d, read n bytes on EOF: %d", request.state, bytesRead)
+				break
 			}
 			return nil, err
 		}
@@ -129,13 +127,7 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 			return 0, fmt.Errorf("error: body longer that Content-Length")
 		}
 		if len(r.Body) == bodyLength {
-			r.state = requestStateParsingBodyDone
-
-		}
-		return len(data), nil
-	case requestStateParsingBodyDone:
-		if len(data) > 0 {
-			return 0, fmt.Errorf("error: body longer that Content-Length")
+			r.state = requestStateDone
 		}
 		return len(data), nil
 	case requestStateDone:
