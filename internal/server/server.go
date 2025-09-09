@@ -35,9 +35,12 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) accept() {
-	for !s.closed.Load() {
+	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
+			if s.closed.Load() {
+				return
+			}
 			log.Printf("Error Accepting connection : %v", err)
 			continue
 		}
