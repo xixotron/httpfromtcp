@@ -57,16 +57,16 @@ func (s *Server) accept() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-	writer := response.NewWriter(conn)
+	w := response.NewWriter(conn)
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		writer.WriteStatusLine(response.StatusBadRequest)
-		message := fmt.Appendf(nil, "Error parsing request: %v", err.Error())
-		writer.WriteHeaders(response.GetDefaultHeaders(len(message)))
-		writer.WriteBody(message)
+		w.WriteStatusLine(response.StatusBadRequest)
+		body := fmt.Appendf(nil, "Error parsing request: %v", err.Error())
+		w.WriteHeaders(response.GetDefaultHeaders(len(body)))
+		w.WriteBody(body)
 
 		log.Printf("Error parsing request: %v", err)
 		return
 	}
-	s.handler(writer, req)
+	s.handler(w, req)
 }
