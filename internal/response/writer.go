@@ -28,26 +28,21 @@ func NewWriter(w io.Writer) *Writer {
 	}
 }
 
-const httpVersion = "HTTP/1.1"
-
 func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	if w.state != writerStateStatusLine {
-		return fmt.Errorf("trying to write status line in incorrect state %d", w.state)
+		return fmt.Errorf("cannot write status line in state %d", w.state)
 	}
+	defer func() { w.state = writerStateWriteHeaders }()
 
-	_, err := fmt.Fprintf(w.writer, "%s %d %s\r\n", httpVersion, statusCode, statusCodeText(statusCode))
-	if err != nil {
-		return err
-	}
-
-	w.state = writerStateWriteHeaders
-	return nil
+	_, err := fmt.Fprint(w.writer, getStatusLine(statusCode))
+	return err
 }
 
 func (w *Writer) WriteHeaders(headers headers.Headers) error {
 	if w.state != writerStateWriteHeaders {
-		return fmt.Errorf("trying to write headers in incorrect state %d", w.state)
+		return fmt.Errorf("cannot write headers in state %d", w.state)
 	}
+	defer func() { w.state = writerStateWriteBody }()
 
 	for key, value := range headers {
 		_, err := fmt.Fprintf(w.writer, "%s: %s\r\n", key, value)
@@ -56,24 +51,14 @@ func (w *Writer) WriteHeaders(headers headers.Headers) error {
 		}
 	}
 	_, err := fmt.Fprint(w.writer, "\r\n")
-	if err != nil {
-		return err
-	}
-
-	w.state = writerStateWriteBody
 	return err
 }
 
 func (w *Writer) WriteBody(p []byte) (int, error) {
 	if w.state != writerStateWriteBody {
-		return 0, fmt.Errorf("trying to write body in incorrect state %d", w.state)
+		return 0, fmt.Errorf("cannot write body in state %d", w.state)
 	}
+	defer func() { w.state = writerStateDone }()
 
-	n, err := w.writer.Write(p)
-	if err != nil {
-		return 0, err
-	}
-
-	w.state = writerStateDone
-	return n, nil
+	return w.writer.Write(p)
 }

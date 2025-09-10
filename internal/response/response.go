@@ -2,6 +2,7 @@ package response
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/xixotron/httpfromtcp/internal/headers"
 )
@@ -14,17 +15,25 @@ const (
 	StatusInternalServerError StatusCode = 500
 )
 
-func statusCodeText(statusCode StatusCode) (statusText string) {
+const httpVersion = "HTTP/1.1"
+
+func getStatusLine(statusCode StatusCode) (statusLine string) {
+	var sb strings.Builder
+
+	sb.WriteString(fmt.Sprintf("%s %d ", httpVersion, statusCode))
+
 	switch statusCode {
 	case StatusOK:
-		return "OK"
+		sb.WriteString("OK")
 	case StatusBadRequest:
-		return "Bad Request"
+		sb.WriteString("Bad Request")
 	case StatusInternalServerError:
-		return "Internal Server Error"
+		sb.WriteString("Internal Server Error")
 	default:
-		return "Unknown Status"
+		sb.WriteString("Unknown Status")
 	}
+	sb.WriteString("\r\n")
+	return sb.String()
 }
 
 func GetDefaultHeaders(contentLen int) headers.Headers {
