@@ -2,7 +2,6 @@ package response
 
 import (
 	"fmt"
-	"io"
 
 	"github.com/xixotron/httpfromtcp/internal/headers"
 )
@@ -15,13 +14,6 @@ const (
 	StatusInternalServerError StatusCode = 500
 )
 
-const httpVersion = "HTTP/1.1"
-
-func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
-	_, err := fmt.Fprintf(w, "%s %d %s\r\n", httpVersion, statusCode, statusCodeText(statusCode))
-	return err
-}
-
 func statusCodeText(statusCode StatusCode) (statusText string) {
 	switch statusCode {
 	case StatusOK:
@@ -33,17 +25,6 @@ func statusCodeText(statusCode StatusCode) (statusText string) {
 	default:
 		return "Unknown Status"
 	}
-}
-
-func WriteHeaders(w io.Writer, headers headers.Headers) error {
-	for key, value := range headers {
-		_, err := fmt.Fprintf(w, "%s: %s\r\n", key, value)
-		if err != nil {
-			return err
-		}
-	}
-	_, err := fmt.Fprint(w, "\r\n")
-	return err
 }
 
 func GetDefaultHeaders(contentLen int) headers.Headers {

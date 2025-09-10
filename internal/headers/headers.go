@@ -70,6 +70,11 @@ func (h Headers) Set(key string, value string) {
 	h[key] = value
 }
 
+func (h Headers) Override(key string, value string) {
+	key = strings.ToLower(key)
+	h[key] = value
+}
+
 func validToken(str string) bool {
 	if len(str) < 1 {
 		return false

@@ -1,10 +1,10 @@
 package main
 
 import (
-	"io"
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/xixotron/httpfromtcp/internal/request"
@@ -28,24 +28,69 @@ func main() {
 	log.Println("Server gracefully stopped")
 }
 
-func handlerFunc(w io.Writer, req *request.Request) *server.HandlerError {
-	if req.RequestLine.RequestTarget == "/yourproblem" {
-		return &server.HandlerError{
-			StatusCode: response.StatusBadRequest,
-			Message:    "Your problem is not my problem\n",
-		}
+func handlerFunc(w *response.Writer, req *request.Request) {
+	const template = `<html>
+  <head>
+    <title>{{title}}</title>
+  </head>
+  <body>
+    <h1>{{heading}}</h1>
+    <p>{{paragraph}}</p>
+  </body>
+</html>
+`
+
+	var resp string
+	var status response.StatusCode
+
+	switch req.RequestLine.RequestTarget {
+	case "/yourproblem":
+		status = response.StatusBadRequest
+		resp = replaceTemplate(template,
+			"400 Bad Request",
+			"Bad Request",
+			"Your request honestly kinda sucked.",
+		)
+	case "/myproblem":
+		resp = replaceTemplate(template,
+			"500 Internal Server Error",
+			"Internal Server Error",
+			"Okay, you know what? This one is on me.",
+		)
+		status = response.StatusInternalServerError
+	default:
+		resp = replaceTemplate(template,
+			"200 OK",
+			"Success!",
+			"Your request was an absolute banger.",
+		)
+		status = response.StatusOK
 	}
 
-	if req.RequestLine.RequestTarget == "/myproblem" {
-		return &server.HandlerError{
-			StatusCode: response.StatusInternalServerError,
-			Message:    "Woopsie, my bad\n",
-		}
-	}
-
-	_, err := w.Write([]byte("All good, frfr\n"))
+	err := w.WriteStatusLine(status)
 	if err != nil {
-		log.Printf("Error writing to buffer: %v", err)
+		log.Print(err)
 	}
-	return nil
+
+	headers := response.GetDefaultHeaders(len(resp))
+	headers.Override("Content-Type", "text/html")
+	err = w.WriteHeaders(headers)
+	if err != nil {
+		log.Print(err)
+	}
+
+	_, err = w.WriteBody([]byte(resp))
+	if err != nil {
+		log.Print(err)
+	}
+}
+
+func replaceTemplate(template, title, heading, paragraph string) string {
+	replacer := strings.NewReplacer(
+		"{{title}}", title,
+		"{{heading}}", heading,
+		"{{paragraph}}", paragraph,
+	)
+	return replacer.Replace(template)
+
 }

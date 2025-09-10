@@ -1,7 +1,6 @@
 package server
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -11,6 +10,8 @@ import (
 	"github.com/xixotron/httpfromtcp/internal/response"
 )
 
+type Handler func(w *response.Writer, req *request.Request)
+
 type Server struct {
 	handler  Handler
 	listener net.Listener
@@ -18,11 +19,11 @@ type Server struct {
 }
 
 func Serve(port int, handler Handler) (*Server, error) {
-	portString := fmt.Sprintf(":%d", port)
-	listener, err := net.Listen("tcp", portString)
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
+
 	s := &Server{
 		handler:  handler,
 		listener: listener,
@@ -56,37 +57,16 @@ func (s *Server) accept() {
 
 func (s *Server) handle(conn net.Conn) {
 	defer conn.Close()
-
+	writer := response.NewWriter(conn)
 	req, err := request.RequestFromReader(conn)
 	if err != nil {
-		log.Printf("Error reading request: %v", err)
-		herr := &HandlerError{
-			StatusCode: response.StatusBadRequest,
-			Message:    err.Error(),
-		}
-		herr.Write(conn)
+		writer.WriteStatusLine(response.StatusBadRequest)
+		message := fmt.Appendf(nil, "Error parsing request: %v", err.Error())
+		writer.WriteHeaders(response.GetDefaultHeaders(len(message)))
+		writer.WriteBody(message)
+
+		log.Printf("Error parsing request: %v", err)
 		return
 	}
-
-	var buff bytes.Buffer
-	herr := s.handler(&buff, req)
-	if herr != nil {
-		herr.Write(conn)
-		return
-	}
-
-	err = response.WriteStatusLine(conn, response.StatusOK)
-	if err != nil {
-		log.Printf("Error writing response Status-Line: %v", err)
-	}
-
-	err = response.WriteHeaders(conn, response.GetDefaultHeaders(buff.Len()))
-	if err != nil {
-		log.Printf("Error writing response Headers: %v", err)
-	}
-
-	_, err = buff.WriteTo(conn)
-	if err != nil {
-		log.Printf("Error writing response Body: %v", err)
-	}
+	s.handler(writer, req)
 }
