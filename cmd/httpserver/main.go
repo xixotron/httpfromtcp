@@ -1,7 +1,10 @@
 package main
 
 import (
+	"io"
 	"log"
+	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -29,7 +32,19 @@ func main() {
 }
 
 func handlerFunc(w *response.Writer, req *request.Request) {
-	const template = `<html>
+	if req.RequestLine.RequestTarget == "/yourproblem" {
+		handler400(w, req)
+	} else if req.RequestLine.RequestTarget == "/myproblem" {
+		handler500(w, req)
+	} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
+		req.RequestLine.RequestTarget = strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin")
+		handleHTTPProxy(w, req, "https://httpbin.org")
+	} else {
+		handler200(w, req)
+	}
+}
+
+const template = `<html>
   <head>
     <title>{{title}}</title>
   </head>
@@ -40,51 +55,6 @@ func handlerFunc(w *response.Writer, req *request.Request) {
 </html>
 `
 
-	var resp string
-	var status response.StatusCode
-
-	switch req.RequestLine.RequestTarget {
-	case "/yourproblem":
-		status = response.StatusBadRequest
-		resp = replaceTemplate(template,
-			"400 Bad Request",
-			"Bad Request",
-			"Your request honestly kinda sucked.",
-		)
-	case "/myproblem":
-		resp = replaceTemplate(template,
-			"500 Internal Server Error",
-			"Internal Server Error",
-			"Okay, you know what? This one is on me.",
-		)
-		status = response.StatusInternalServerError
-	default:
-		resp = replaceTemplate(template,
-			"200 OK",
-			"Success!",
-			"Your request was an absolute banger.",
-		)
-		status = response.StatusOK
-	}
-
-	err := w.WriteStatusLine(status)
-	if err != nil {
-		log.Print(err)
-	}
-
-	headers := response.GetDefaultHeaders(len(resp))
-	headers.Override("Content-Type", "text/html")
-	err = w.WriteHeaders(headers)
-	if err != nil {
-		log.Print(err)
-	}
-
-	_, err = w.WriteBody([]byte(resp))
-	if err != nil {
-		log.Print(err)
-	}
-}
-
 func replaceTemplate(template, title, heading, paragraph string) string {
 	replacer := strings.NewReplacer(
 		"{{title}}", title,
@@ -93,4 +63,92 @@ func replaceTemplate(template, title, heading, paragraph string) string {
 	)
 	return replacer.Replace(template)
 
+}
+
+func handler400(w *response.Writer, _ *request.Request) {
+	resp := replaceTemplate(template,
+		"400 Bad Request",
+		"Bad Request",
+		"Your request honestly kinda sucked.",
+	)
+	headers := response.GetDefaultHeaders(len(resp))
+	headers.Override("Content-Type", "text/html")
+	w.WriteStatusLine(response.StatusBadRequest)
+	w.WriteHeaders(headers)
+	w.WriteBody([]byte(resp))
+}
+
+func handler500(w *response.Writer, _ *request.Request) {
+	resp := replaceTemplate(template,
+		"500 Internal Server Error",
+		"Internal Server Error",
+		"Okay, you know what? This one is on me.",
+	)
+	headers := response.GetDefaultHeaders(len(resp))
+	headers.Override("Content-Type", "text/html")
+	w.WriteStatusLine(response.StatusInternalServerError)
+	w.WriteHeaders(headers)
+	w.WriteBody([]byte(resp))
+}
+
+func handler200(w *response.Writer, _ *request.Request) {
+	resp := replaceTemplate(template,
+		"200 OK",
+		"Success!",
+		"Your request was an absolute banger.",
+	)
+	headers := response.GetDefaultHeaders(len(resp))
+	headers.Override("Content-Type", "text/html")
+	w.WriteStatusLine(response.StatusOK)
+	w.WriteHeaders(headers)
+	w.WriteBody([]byte(resp))
+}
+
+func handleHTTPProxy(w *response.Writer, req *request.Request, target string) {
+	url, err := url.JoinPath(target, req.RequestLine.RequestTarget)
+	if err != nil {
+		handler400(w, req)
+		return
+	}
+
+	resp, err := http.Get(url)
+	if err != nil {
+		log.Printf("error redirecting request: %v", err)
+		handler500(w, req)
+		return
+	}
+	defer resp.Body.Close()
+
+	h := response.GetDefaultHeaders(0)
+	h.Override("Transfer-Encoding", "chunked")
+	h.Remove("Content-Length")
+	h.Override("Content-Type", resp.Header.Get("Content-Type"))
+
+	w.WriteStatusLine(response.StatusOK)
+	w.WriteHeaders(h)
+
+	const chunkSize = 1024
+	buff := make([]byte, chunkSize)
+	for {
+		n, err := resp.Body.Read(buff)
+		log.Printf("Reading %v bytes from target", n)
+		if n > 0 {
+			_, err := w.WriteChunkedBody(buff[:n])
+			if err != nil {
+				log.Printf("error writing chunked body: %v", err)
+				break
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("error reading response body: %v", err)
+			break
+		}
+	}
+	_, err = w.WriteChunkedBodyDone()
+	if err != nil {
+		log.Printf("error writing chunked body: %v", err)
+	}
 }
