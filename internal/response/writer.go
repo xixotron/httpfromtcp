@@ -13,6 +13,7 @@ const (
 	writerStateStatusLine writerState = iota
 	writerStateWriteHeaders
 	writerStateWriteBody
+	writerStateWriteBodyChunks
 	writerStateDone
 )
 
@@ -61,4 +62,23 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	defer func() { w.state = writerStateDone }()
 
 	return w.writer.Write(p)
+}
+
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.state != writerStateWriteBody && w.state != writerStateWriteBodyChunks {
+		return 0, fmt.Errorf("cannot write body in state %d", w.state)
+	}
+	defer func() { w.state = writerStateWriteBodyChunks }()
+
+	return fmt.Fprintf(w.writer, "%x\r\n%s\r\n", len(p), p)
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.state != writerStateWriteBody && w.state != writerStateWriteBodyChunks {
+		return 0, fmt.Errorf("cannot chucked body done in state %d", w.state)
+	}
+
+	defer func() { w.state = writerStateDone }()
+
+	return w.writer.Write([]byte("0\r\n\r\n"))
 }

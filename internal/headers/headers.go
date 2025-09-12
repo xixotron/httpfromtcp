@@ -75,6 +75,11 @@ func (h Headers) Override(key string, value string) {
 	h[key] = value
 }
 
+func (h Headers) Remove(key string) {
+	key = strings.ToLower(key)
+	delete(h, key)
+}
+
 func validToken(str string) bool {
 	if len(str) < 1 {
 		return false
