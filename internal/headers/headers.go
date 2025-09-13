@@ -64,7 +64,7 @@ func (h Headers) Set(key string, value string) {
 				previous,
 				value,
 			},
-			",",
+			", ",
 		)
 	}
 	h[key] = value

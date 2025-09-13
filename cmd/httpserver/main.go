@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -10,6 +12,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/xixotron/httpfromtcp/internal/headers"
 	"github.com/xixotron/httpfromtcp/internal/request"
 	"github.com/xixotron/httpfromtcp/internal/response"
 	"github.com/xixotron/httpfromtcp/internal/server"
@@ -123,17 +126,23 @@ func handleHTTPProxy(w *response.Writer, req *request.Request, target string) {
 	h.Override("Transfer-Encoding", "chunked")
 	h.Remove("Content-Length")
 	h.Override("Content-Type", resp.Header.Get("Content-Type"))
+	h.Set("Trailer", "X-Content-SHA256")
+	h.Set("Trailer", "X-Content-Length")
 
 	w.WriteStatusLine(response.StatusOK)
 	w.WriteHeaders(h)
 
 	const chunkSize = 1024
 	buff := make([]byte, chunkSize)
+	hash := sha256.New()
+	contentLength := 0
 	for {
 		n, err := resp.Body.Read(buff)
 		log.Printf("Reading %v bytes from target", n)
 		if n > 0 {
+			contentLength += n
 			_, err := w.WriteChunkedBody(buff[:n])
+			hash.Write(buff[:n])
 			if err != nil {
 				log.Printf("error writing chunked body: %v", err)
 				break
@@ -147,8 +156,13 @@ func handleHTTPProxy(w *response.Writer, req *request.Request, target string) {
 			break
 		}
 	}
-	_, err = w.WriteChunkedBodyDone()
+
+	checksum := hash.Sum(nil)
+	t := headers.NewHeaders()
+	t.Set("X-Content-SHA256", fmt.Sprintf("%x", checksum))
+	t.Set("X-Content-Length", fmt.Sprintf("%d", contentLength))
+	err = w.WriteTrailers(t)
 	if err != nil {
-		log.Printf("error writing chunked body: %v", err)
+		log.Printf("error writing trailers: %v", err)
 	}
 }
