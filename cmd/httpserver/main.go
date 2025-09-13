@@ -42,6 +42,8 @@ func handlerFunc(w *response.Writer, req *request.Request) {
 	} else if strings.HasPrefix(req.RequestLine.RequestTarget, "/httpbin/") {
 		req.RequestLine.RequestTarget = strings.TrimPrefix(req.RequestLine.RequestTarget, "/httpbin")
 		handleHTTPProxy(w, req, "https://httpbin.org")
+	} else if req.RequestLine.RequestTarget == "/video" {
+		handleVideo(w, req)
 	} else {
 		handler200(w, req)
 	}
@@ -157,11 +159,53 @@ func handleHTTPProxy(w *response.Writer, req *request.Request, target string) {
 		}
 	}
 
-	checksum := hash.Sum(nil)
-	t := headers.NewHeaders()
-	t.Set("X-Content-SHA256", fmt.Sprintf("%x", checksum))
-	t.Set("X-Content-Length", fmt.Sprintf("%d", contentLength))
-	err = w.WriteTrailers(t)
+	trailers := headers.NewHeaders()
+	trailers.Set("X-Content-SHA256", fmt.Sprintf("%x", hash.Sum(nil)))
+	trailers.Set("X-Content-Length", fmt.Sprintf("%d", contentLength))
+	err = w.WriteTrailers(trailers)
+	if err != nil {
+		log.Printf("error writing trailers: %v", err)
+	}
+}
+
+func handleVideo(w *response.Writer, req *request.Request) {
+	file, err := os.Open("./assets/vim.mp4")
+	if err != nil {
+		handler500(w, req)
+		log.Printf("error reading video file: %v", err)
+		return
+	}
+
+	h := response.GetDefaultHeaders(0)
+	h.Override("Transfer-Encoding", "chunked")
+	h.Remove("Content-Length")
+	h.Override("Content-Type", "video/mp4")
+
+	w.WriteStatusLine(response.StatusOK)
+	w.WriteHeaders(h)
+
+	const chunkSize = 1024
+	buff := make([]byte, chunkSize)
+	for {
+		n, err := file.Read(buff)
+		log.Printf("Reading %v video bytes", n)
+		if n > 0 {
+			_, err := w.WriteChunkedBody(buff[:n])
+			if err != nil {
+				log.Printf("error writing chunked body: %v", err)
+				break
+			}
+		}
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			log.Printf("error reading response body: %v", err)
+			break
+		}
+	}
+
+	_, err = w.WriteChunkedBodyDone()
 	if err != nil {
 		log.Printf("error writing trailers: %v", err)
 	}
